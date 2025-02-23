@@ -1,10 +1,15 @@
-version: "3"
-
 services:
   broadcast-box:
     environment:
     - INCLUDE_PUBLIC_IP_IN_NAT_1_TO_1_IP=yes
-    image: seaduboi/broadcast-box:latest
+    - URL=${URL}
+    - HTTP_ADDRESS=${HTTP_ADDRESS}
+    - STATUS_AUTH_TOKEN=${STATUS_AUTH_TOKEN}
+    - STREAM_AUTH_ENDPOINT=${STREAM_AUTH_ENDPOINT}
+    - DISABLE_FRONTEND=true
+    - INCLUDE_PUBLIC_IP_IN_NAT_1_TO_1_IP=yes
+    - CADDY_INGRESS_NETWORKS=caddy
+    image: soolutions/broadcast-box:latest
     hostname: broadcast-box
     container_name: broadcast-box
     network_mode: "host"

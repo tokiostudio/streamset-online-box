@@ -196,6 +196,13 @@ will be automatically updated every night. If you are running on a VPS/Cloud ser
 export URL=my-server.com
 docker-compose up -d
 ```
+
+here with Infisical integration:
+
+```console
+infisical run --path="/BROADCAST_BOX" --env=prod  -- docker compose up -d
+```
+
 ## URL Parameters
 
 The frontend can be configured by passing these URL Parameters.
