@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
+
 	"github.com/glimesh/broadcast-box/internal/networktest"
 	"github.com/glimesh/broadcast-box/internal/webrtc"
 	"github.com/joho/godotenv"
@@ -35,6 +37,17 @@ type (
 	whepLayerRequestJSON struct {
 		MediaId    string `json:"mediaId"`
 		EncodingId string `json:"encodingId"`
+	}
+
+	streamAuthRequest struct {
+		StreamKey  string `json:"streamKey"`
+		StreamAuth string `json:"streamAuth"`
+		IPAddress  string `json:"ipAddress"`
+		SDPOffer   string `json:"sdpOffer"`
+	}
+
+	streamAuthResponse struct {
+		Authorized bool `json:"authorized"`
 	}
 )
 
@@ -66,18 +79,71 @@ func whipHandler(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	streamKey, ok := extractBearerToken(streamKeyHeader)
-	if !ok || !validateStreamKey(streamKey) {
+	fullStreamKey, ok := extractBearerToken(streamKeyHeader)
+	if !ok || !validateStreamKey(fullStreamKey) {
 		logHTTPError(res, "Invalid stream key format", http.StatusBadRequest)
 		return
 	}
 
-	offer, err := io.ReadAll(r.Body)
-	if err != nil {
-		logHTTPError(res, err.Error(), http.StatusBadRequest)
-		return
+	// Split the stream key into key and auth parts
+	parts := strings.Split(fullStreamKey, "_")
+	streamKey := parts[0]
+	streamAuth := ""
+	offer := []byte{}
+
+	// If auth endpoint is configured, we require the auth part
+	if authEndpoint := os.Getenv("STREAM_AUTH_ENDPOINT"); authEndpoint != "" {
+		if len(parts) != 2 {
+			logHTTPError(res, "Invalid stream key format: missing auth token", http.StatusBadRequest)
+			return
+		}
+		streamAuth = parts[1]
+
+		offerTemp, err := io.ReadAll(r.Body)
+		offer = offerTemp
+		if err != nil {
+			logHTTPError(res, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
+	// Check if auth endpoint is configured
+	if authEndpoint := os.Getenv("STREAM_AUTH_ENDPOINT"); authEndpoint != "" {
+		// Prepare auth request
+		authReq := streamAuthRequest{
+			StreamKey:  streamKey,
+			StreamAuth: streamAuth,
+			IPAddress:  strings.Split(r.RemoteAddr, ":")[0],
+			SDPOffer:   string(offer),
+		}
+
+		jsonBody, err := json.Marshal(authReq)
+		if err != nil {
+			logHTTPError(res, "Failed to create auth request", http.StatusInternalServerError)
+			return
+		}
+
+		// Make the auth request
+		resp, err := http.Post(authEndpoint, "application/json", bytes.NewBuffer(jsonBody))
+		if err != nil {
+			logHTTPError(res, "Failed to contact auth server", http.StatusServiceUnavailable)
+			return
+		}
+		defer resp.Body.Close()
+
+		var authResp streamAuthResponse
+		if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+			logHTTPError(res, "Invalid response from auth server", http.StatusBadGateway)
+			return
+		}
+
+		if !authResp.Authorized {
+			logHTTPError(res, "Stream key not authorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	// Proceed with WHIP using only the stream key part
 	answer, err := webrtc.WHIP(string(offer), streamKey)
 	if err != nil {
 		logHTTPError(res, err.Error(), http.StatusBadRequest)
@@ -160,8 +226,21 @@ func whepLayerHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func statusHandler(res http.ResponseWriter, req *http.Request) {
-	res.Header().Add("Content-Type", "application/json")
+	if authToken := os.Getenv("STATUS_AUTH_TOKEN"); authToken != "" {
+		streamKeyHeader := req.Header.Get("Authorization")
+		if streamKeyHeader == "" {
+			logHTTPError(res, "Authorization was not set", http.StatusUnauthorized)
+			return
+		}
 
+		token, ok := extractBearerToken(streamKeyHeader)
+		if !ok || token != authToken {
+			logHTTPError(res, "Invalid authorization token", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	res.Header().Add("Content-Type", "application/json")
 	if err := json.NewEncoder(res).Encode(webrtc.GetStreamStatuses()); err != nil {
 		logHTTPError(res, err.Error(), http.StatusBadRequest)
 	}

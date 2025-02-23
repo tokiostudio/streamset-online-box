@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  broadcast-box:
+    environment:
+    - INCLUDE_PUBLIC_IP_IN_NAT_1_TO_1_IP=no
+    - NETWORK_TEST_ON_START=false
+    - URL=localhost
+    - HTTP_ADDRESS=:8080
+    - STATUS_AUTH_TOKEN=auth-token
+    - STREAM_AUTH_ENDPOINT=http://host.docker.internal:3002/auth
+    - UDP_MUX_PORT=8080
+    - NAT_1_TO_1_IP=127.0.0.1
+    image: broadcast-box
+    hostname: broadcast-box
+    container_name: broadcast-box
+    ports:
+      - "8080:8080"
+      - "8080:8080/udp"
+    privileged: true

@@ -235,6 +235,9 @@ The backend can be configured with the following environment variables.
 - `DEBUG_PRINT_OFFER` - Print WebRTC Offers from client to Broadcast Box. Debug things like accepted codecs.
 - `DEBUG_PRINT_ANSWER` - Print WebRTC Answers from Broadcast Box to Browser. Debug things like IP/Ports returned to client.
 
+- `STATUS_AUTH_TOKEN` - When set, requires Bearer token authentication to access the `/api/status` endpoint. The token must match this value.
+- `STREAM_AUTH_ENDPOINT` - When set, requires stream authentication through an external service. The stream key must be in the format `streamKey_authToken`. The service will receive a POST request with stream details and must return `{"authorized": true}` to allow streaming.
+
 ## Network Test on Start
 
 When running in Docker Broadcast Box runs a network tests on startup. This tests that WebRTC traffic can be established
