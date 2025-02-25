@@ -165,6 +165,9 @@ func WHIP(offer, streamKey string) (string, error) {
 
 	peerConnection.OnICEConnectionStateChange(func(i webrtc.ICEConnectionState) {
 		if i == webrtc.ICEConnectionStateFailed || i == webrtc.ICEConnectionStateClosed {
+			// we log the exact cause of the disconnection:
+			log.Println(i.String())
+
 			if err := peerConnection.Close(); err != nil {
 				log.Println(err)
 			}
